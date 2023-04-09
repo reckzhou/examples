@@ -6,6 +6,7 @@ import pandas as pd
 import openai
 import os
 
+#如果不需要代理直接访问则可以屏蔽代理部分
 PROXY_URL = "xxxxx"
 os.environ["http_proxy"] = PROXY_URL
 os.environ["https_proxy"] = PROXY_URL
@@ -54,6 +55,7 @@ def create_train_task():
     openai.api_key = OPENAI_API_KEY
     openai.verify_ssl_certs = False
     openai.proxy = PROXY_URL
+    #上传训练文件
     train_file_result = openai.File.create(
         file=open("data/train_sport.jsonl"),
         purpose="fine-tune"
@@ -72,6 +74,7 @@ def create_train_task():
         }
     """
     print(train_file_result["id"])
+    #上传评估文件
     valid_file_result = openai.File.create(
         file=open("data/valid_sport.jsonl"),
         purpose="fine-tune"
@@ -81,14 +84,15 @@ def create_train_task():
         model="davinci",  # 目前允许fine-tune的模型只有(ada, babbage, curie, davinci)
         training_file=train_file_result["id"],  # 将train上传文件的id作为训练目标
         validation_file=valid_file_result["id"],  # 将valid上传文件的id作为评估目标
-        n_epochs=4,
-        batch_size=128,
-        learning_rate_multiplier=0.2,
-        prompt_loss_weight=0.01,
-        compute_classification_metrics=True,
+        n_epochs=4, #训练评估迭代次数
+        batch_size=128, 
+        learning_rate_multiplier=0.2,#注意此处非学习率，而是针对learning rate的倍数
+        prompt_loss_weight=0.01, #默认
+        compute_classification_metrics=True,#是否启用评估指标，如F1等
         classification_positive_class="baseball",  # 由于是二分类问题，因此此处将'baseball'作为正分类（1），默认hockey作为negative分类(0)，
         suffix="sport"  # 对训练的模型添加后缀便于区分
     )
+    #将训练任务的信息存储
     with open("data/result.dat", "w+") as writer:
         json.dump(result, writer)
 
@@ -100,6 +104,7 @@ def query_train_result():
     openai.verify_ssl_certs = False
     openai.proxy = PROXY_URL
     with open("data/result.dat", "r+") as reader:
+        #读取训练任务信息
         data = json.load(reader)
         request_id = data["id"]
         # result=openai.FineTune.list(api_key=OPENAI_API_KEY,request_id=request_id)
@@ -110,6 +115,9 @@ def query_train_result():
 
 
 if __name__ == "__main__":
-    # create_train()
-    # post_train()
+    #创建样本用于训练/评估
+    create_examples()
+    #上传数据文件，建立fine-tuning训练任务
+    create_train_task()
+    #查询训练任务状态
     query_train_result()
